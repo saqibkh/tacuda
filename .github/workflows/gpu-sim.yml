@@ -7,6 +7,8 @@ name: GPU Simulator
 # and does not replace them.
 
 on:
+  push:
+    branches: [verify-gpu-sim-v2]
   workflow_dispatch:
   pull_request:
     paths:
@@ -30,8 +32,12 @@ permissions:
 
 jobs:
   cpp-tests:
-    name: C++ tests (CUDA 13.0 and simulated H100)
+    name: C++ tests (async ${{ matrix.async }})
     runs-on: ubuntu-24.04
+    strategy:
+      fail-fast: false
+      matrix:
+        async: ['0', 'default']
     timeout-minutes: 120
 
     steps:
@@ -77,6 +83,8 @@ jobs:
       # the simulator is told to launch synchronously. Test results are
       # unchanged on hardware; this only affects the simulator's scheduling.
       - name: Test
-        env:
-          VGPU_ASYNC_LAUNCH: "0"
-        run: vgpu run ./build/test_basic
+        run: |
+          if [ "${{ matrix.async }}" = 0 ]; then export VGPU_ASYNC_LAUNCH=0; fi
+          vgpu run ./build/test_basic 2>&1 | tee test.out
+          echo "---- summary"
+          grep -E "PASSED|FAILED|SKIPPED|tests ran|VirtualGPU" test.out | sort | uniq -c | head -40
